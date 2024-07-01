@@ -1,0 +1,608 @@
+diff --git a/README_Frontend.md b/README_Frontend.md
+new file mode 100644
+index 0000000..a7acf80
+--- /dev/null
++++ b/README_Frontend.md
+@@ -0,0 +1,36 @@
++# BEVFormer
++Apply the changes made in the patch file
++
++## Docker Setup
++Export paths of the already prepared dataset to the following ENV variables.
++
++    export CAN_BUS_DIR=<path_to_canbus>
++    export NUSCENES_DIR=<path_to_nuscenes>
++
++    docker build -t trt85 -f docker/Dockerfile .
++    ./docker_run.sh
++
++The docker environment will be ready at this stage. The datasets will be mounted to "/workspace/BEVFormer_tensorrt/data/can_bus/" and "/workspace/BEVFormer_tensorrt/data/nuscenes"
++
++    # in container
++    Copy the libmmdeploy_onnxruntime_ops from /mmdeploy/build/lib/ to checkpoints/onnx/
++
++    cd /workspace/BEVFormer_tensorrt/TensorRT/build
++    cmake .. -DCMAKE_TENSORRT_PATH=/usr
++    make -j$(nproc)
++    make install
++
++    cd /workspace/BEVFormer_tensorrt/third_party/bev_mmdet3d
++    python setup.py build develop --user
++## PyTorch Inference
++Use the below command to run the PyTorch inference:
++
++    sh samples/bevformer/base/pth_evaluate.sh pytorch
++
++## ONNX Model Export
++
++
++## ONNX-Runtime Inference
++Use the below command to run the ONNX-Runtime inference:
++
++    sh samples/bevformer/base/pth_evaluate.sh onnxruntime
+\ No newline at end of file
+diff --git a/configs/bevdet/bevdet-r50-cbgs.py b/configs/bevdet/bevdet-r50-cbgs.py
+index 56220a4..992503d 100644
+--- a/configs/bevdet/bevdet-r50-cbgs.py
++++ b/configs/bevdet/bevdet-r50-cbgs.py
+@@ -186,7 +186,7 @@ model = dict(
+ 
+ # Data
+ dataset_type = "BEVDetNuScenesDataset"
+-data_root = "data/nuscenes/"
++data_root = "/workspace/BEVFormer_tensorrt/data/nuscenes/"
+ file_client_args = dict(backend="disk")
+ 
+ bda_aug_conf = dict(
+diff --git a/configs/bevformer/bevformer_base.py b/configs/bevformer/bevformer_base.py
+index 9821ad7..db383e1 100644
+--- a/configs/bevformer/bevformer_base.py
++++ b/configs/bevformer/bevformer_base.py
+@@ -204,7 +204,7 @@ model = dict(
+ )
+ 
+ dataset_type = "BEVFormerNuScenesDataset"
+-data_root = "data/nuscenes/"
++data_root = "/workspace/BEVFormer_tensorrt/data/nuscenes/"
+ file_client_args = dict(backend="disk")
+ 
+ 
+diff --git a/configs/bevformer/bevformer_small.py b/configs/bevformer/bevformer_small.py
+index 42906ee..5d6db75 100644
+--- a/configs/bevformer/bevformer_small.py
++++ b/configs/bevformer/bevformer_small.py
+@@ -213,7 +213,7 @@ model = dict(
+ )
+ 
+ dataset_type = "BEVFormerNuScenesDataset"
+-data_root = "data/nuscenes/"
++data_root = "/workspace/BEVFormer_tensorrt/data/nuscenes/"
+ file_client_args = dict(backend="disk")
+ 
+ 
+diff --git a/configs/bevformer/bevformer_tiny.py b/configs/bevformer/bevformer_tiny.py
+index 295a7d5..f5ebcb4 100644
+--- a/configs/bevformer/bevformer_tiny.py
++++ b/configs/bevformer/bevformer_tiny.py
+@@ -212,7 +212,7 @@ model = dict(
+ )
+ 
+ dataset_type = "BEVFormerNuScenesDataset"
+-data_root = "data/nuscenes/"
++data_root = "/workspace/BEVFormer_tensorrt/data/nuscenes/"
+ file_client_args = dict(backend="disk")
+ 
+ train_pipeline = [
+diff --git a/configs/bevformer/bevformer_tiny_trt.py b/configs/bevformer/bevformer_tiny_trt.py
+index 626a4f0..ec21c07 100644
+--- a/configs/bevformer/bevformer_tiny_trt.py
++++ b/configs/bevformer/bevformer_tiny_trt.py
+@@ -1,4 +1,4 @@
+-_base_ = ["bevformer_tiny.py", "../_base_/det2trt.py"]
++_base_ = ["bevformer_tiny_r18.py", "../_base_/det2trt.py"]
+ 
+ model = dict(
+     type="BEVFormerTRT",
+diff --git a/configs/datasets/custom_nus-3d.py b/configs/datasets/custom_nus-3d.py
+index d515b2d..f8f1d80 100644
+--- a/configs/datasets/custom_nus-3d.py
++++ b/configs/datasets/custom_nus-3d.py
+@@ -15,7 +15,7 @@ class_names = [
+     "barrier",
+ ]
+ dataset_type = "NuScenesDataset_eval_modified"
+-data_root = "data/nuscenes/"
++data_root = "/workspace/bevformer/bevformer/data/nuscenes/"
+ # Input modality for nuScenes dataset, this is consistent with the submission
+ # format which requires the information in input_modality.
+ input_modality = dict(
+diff --git a/data/.gitignore b/data/.gitignore
+deleted file mode 100644
+index 5e7d273..0000000
+--- a/data/.gitignore
++++ /dev/null
+@@ -1,4 +0,0 @@
+-# Ignore everything in this directory
+-*
+-# Except this file
+-!.gitignore
+diff --git a/det2trt/convert/pytorch2onnx.py b/det2trt/convert/pytorch2onnx.py
+index 978e544..a964696 100644
+--- a/det2trt/convert/pytorch2onnx.py
++++ b/det2trt/convert/pytorch2onnx.py
+@@ -64,8 +64,8 @@ def pytorch2onnx(
+         export_params=True,
+         keep_initializers_as_inputs=True,
+         do_constant_folding=False,
+-        verbose=verbose,
+-        opset_version=opset_version,
++        verbose=True,
++        opset_version=13,
+         dynamic_axes=dynamic_axes,
+         operator_export_type=OperatorExportTypes.ONNX_FALLTHROUGH,
+     )
+diff --git a/det2trt/models/backbones/resnet.py b/det2trt/models/backbones/resnet.py
+index 49e857c..6183c10 100644
+--- a/det2trt/models/backbones/resnet.py
++++ b/det2trt/models/backbones/resnet.py
+@@ -9,7 +9,7 @@ from torch.nn.modules.batchnorm import _BatchNorm
+ from mmdet.models.builder import BACKBONES
+ from mmdet.models.utils import ResLayer
+ 
+-import pytorch_quantization.nn as quant_nn
++# import pytorch_quantization.nn as quant_nn
+ 
+ 
+ class BasicBlock(BaseModule):
+diff --git a/det2trt/models/dense_heads/centernet_head.py b/det2trt/models/dense_heads/centernet_head.py
+index 2d5cd94..1c0aea4 100644
+--- a/det2trt/models/dense_heads/centernet_head.py
++++ b/det2trt/models/dense_heads/centernet_head.py
+@@ -1,7 +1,7 @@
+ from mmdet.models.builder import HEADS
+ from mmdet.models.dense_heads.centernet_head import CenterNetHead
+ 
+-from pytorch_quantization import nn as quant_nn
++# from pytorch_quantization import nn as quant_nn
+ import torch.nn as nn
+ 
+ 
+diff --git a/det2trt/models/dense_heads/yolox_head.py b/det2trt/models/dense_heads/yolox_head.py
+index 4fa2215..fa39a61 100644
+--- a/det2trt/models/dense_heads/yolox_head.py
++++ b/det2trt/models/dense_heads/yolox_head.py
+@@ -1,7 +1,7 @@
+ from mmdet.models.builder import HEADS
+ from mmdet.models.dense_heads.yolox_head import YOLOXHead
+ 
+-from pytorch_quantization import nn as quant_nn
++# from pytorch_quantization import nn as quant_nn
+ 
+ 
+ @HEADS.register_module()
+diff --git a/det2trt/models/modules/cnn/dcn.py b/det2trt/models/modules/cnn/dcn.py
+index 2ca2e01..bf093f3 100644
+--- a/det2trt/models/modules/cnn/dcn.py
++++ b/det2trt/models/modules/cnn/dcn.py
+@@ -1,6 +1,6 @@
+ import torch
+ import torch.nn as nn
+-import pytorch_quantization.nn as quant_nn
++# import pytorch_quantization.nn as quant_nn
+ from mmcv.ops.modulated_deform_conv import (
+     ModulatedDeformConv2dPack,
+     ModulatedDeformConv2d,
+diff --git a/det2trt/models/modules/encoder.py b/det2trt/models/modules/encoder.py
+index ad5128f..7f93485 100644
+--- a/det2trt/models/modules/encoder.py
++++ b/det2trt/models/modules/encoder.py
+@@ -127,10 +127,10 @@ class BEVFormerEncoderTRT(BEVFormerEncoder):
+         bs, len_bev, num_bev_level, _ = ref_2d.shape
+ 
+         prev_bev = prev_bev.permute(1, 0, 2)
+-        prev_bev = torch.stack([prev_bev, bev_query], 1).reshape(bs * 2, len_bev, -1)
++        prev_bev = torch.stack([prev_bev, bev_query], 1).reshape(bs * 2, len_bev, -1).to(dtype=torch.float32)
+         hybird_ref_2d = torch.stack([shift_ref_2d, ref_2d], 1).reshape(
+             bs * 2, len_bev, num_bev_level, 2
+-        )
++        ).to(dtype=torch.float32)
+ 
+         for lid, layer in enumerate(self.layers):
+             output = layer.forward_trt(
+@@ -168,7 +168,7 @@ class BEVFormerEncoderTRTP(BEVFormerEncoderTRT):
+ 
+     @staticmethod
+     def get_reference_points_3d(
+-        H, W, Z=8, num_points_in_pillar=4, bs=1, device="cuda", dtype=torch.float,
++        H, W, Z=8, num_points_in_pillar=4, bs=1, device="cuda", dtype=torch.float32,
+     ):
+         zs = (
+             torch.linspace(
+diff --git a/det2trt/models/utils/register.py b/det2trt/models/utils/register.py
+index 2fb2d0c..c7d3643 100644
+--- a/det2trt/models/utils/register.py
++++ b/det2trt/models/utils/register.py
+@@ -1,6 +1,6 @@
+ from mmcv.cnn.bricks.registry import CONV_LAYERS
+ from mmcv.utils import Registry
+-from pytorch_quantization import nn as quant_nn
++# from pytorch_quantization import nn as quant_nn
+ from torch import nn
+ import os
+ import ctypes
+@@ -74,13 +74,13 @@ OS_PATH = os.path.realpath(OS_PATH)
+ ctypes.CDLL(OS_PATH)
+ print(f"Loaded tensorrt plugins from {OS_PATH}")
+ 
+-CONV_LAYERS.register_module("Conv1dQ", module=quant_nn.Conv1d)
+-CONV_LAYERS.register_module("Conv2dQ", module=quant_nn.Conv2d)
+-CONV_LAYERS.register_module("Conv3dQ", module=quant_nn.Conv3d)
+-CONV_LAYERS.register_module("ConvQ", module=quant_nn.Conv2d)
++# CONV_LAYERS.register_module("Conv1dQ", module=quant_nn.Conv1d)
++# CONV_LAYERS.register_module("Conv2dQ", module=quant_nn.Conv2d)
++# CONV_LAYERS.register_module("Conv3dQ", module=quant_nn.Conv3d)
++# CONV_LAYERS.register_module("ConvQ", module=quant_nn.Conv2d)
+ 
+ LINEAR_LAYERS = Registry("linear layer")
+ LINEAR_LAYERS.register_module("Linear", module=nn.Linear)
+-LINEAR_LAYERS.register_module("LinearQ", module=quant_nn.Linear)
++# LINEAR_LAYERS.register_module("LinearQ", module=quant_nn.Linear)
+ 
+ TRT_FUNCTIONS = FuncRegistry("tensorrt functions")
+diff --git a/det2trt/models/utils/scp_layer.py b/det2trt/models/utils/scp_layer.py
+index 3af1b39..020cbc0 100644
+--- a/det2trt/models/utils/scp_layer.py
++++ b/det2trt/models/utils/scp_layer.py
+@@ -3,7 +3,7 @@ import torch.nn as nn
+ from mmcv.cnn import ConvModule, DepthwiseSeparableConvModule
+ from mmcv.runner import BaseModule
+ 
+-from pytorch_quantization import nn as quant_nn
++# from pytorch_quantization import nn as quant_nn
+ 
+ 
+ class DarknetBottleneck(BaseModule):
+diff --git a/det2trt/quantization/calibrator_qdq.py b/det2trt/quantization/calibrator_qdq.py
+index 048eaa2..24a6b6b 100644
+--- a/det2trt/quantization/calibrator_qdq.py
++++ b/det2trt/quantization/calibrator_qdq.py
+@@ -1,8 +1,8 @@
+ import torch
+ import mmcv
+-from pytorch_quantization import nn as quant_nn
+-from pytorch_quantization import calib
+-from pytorch_quantization.tensor_quant import QuantDescriptor
++# from pytorch_quantization import nn as quant_nn
++# from pytorch_quantization import calib
++# from pytorch_quantization.tensor_quant import QuantDescriptor
+ 
+ 
+ def init_quant_desc(calibrator, per_channel_quantization=False):
+diff --git a/docker/Dockerfile b/docker/Dockerfile
+index ad94148..89477bf 100644
+--- a/docker/Dockerfile
++++ b/docker/Dockerfile
+@@ -9,8 +9,8 @@ ENV TRT_VERSION 8.5.3.1
+ SHELL ["/bin/bash", "-c"]
+ 
+ # Setup user account
+-ARG uid=1000
+-ARG gid=1000
++ARG uid=1001
++ARG gid=1001
+ RUN groupadd -r -f -g ${gid} trtuser && useradd -o -r -l -u ${uid} -g ${gid} -ms /bin/bash trtuser
+ RUN usermod -aG sudo trtuser
+ RUN echo 'trtuser:nvidia' | chpasswd
+@@ -23,7 +23,17 @@ ENV DEBIAN_FRONTEND=noninteractive
+ RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub
+ 
+ # Install requried libraries
+-RUN apt-get update && apt-get install -y software-properties-common
++RUN apt-get update && apt-get install -y --no-install-recommends \
++    git-lfs sudo software-properties-common python3-venv gpg-agent \
++    && add-apt-repository -y ppa:deadsnakes/ppa \
++    && apt-get update \
++    && apt-get install -y --no-install-recommends python3.8 python3.8-dev python3.8-venv \
++    && apt-get install -y liblapack-dev \
++    && apt-get install -y curl vim nano patch wget cmake gcc g++ \
++    && apt-get install -y libgl1-mesa-glx \
++    && apt-get clean \
++    && rm -rf /var/lib/apt/lists/*
++
+ RUN add-apt-repository ppa:ubuntu-toolchain-r/test
+ RUN apt-get update && apt-get install -y --no-install-recommends \
+     libcurl4-openssl-dev \
+@@ -82,7 +92,11 @@ RUN cd /tmp && \
+     rm ./cmake-3.14.4-Linux-x86_64.sh
+ 
+ # Download NGC client
+-RUN cd /usr/local/bin && wget https://ngc.nvidia.com/downloads/ngccli_cat_linux.zip && unzip ngccli_cat_linux.zip && chmod u+x ngc-cli/ngc && rm ngccli_cat_linux.zip ngc-cli.md5 && echo "no-apikey\nascii\n" | ngc-cli/ngc config set
++# Changed the command, For more information please refer: https://github.com/NVIDIA/TensorRT/issues/3721
++# ORIGINAL: RUN cd /usr/local/bin && wget https://ngc.nvidia.com/downloads/ngccli_cat_linux.zip && unzip ngccli_cat_linux.zip && chmod u+x ngc-cli/ngc && rm ngccli_cat_linux.zip ngc-cli.md5 && echo "no-apikey\nascii\n" | ngc-cli/ngc config set
++# MODIFIED:
++RUN cd /usr/local/bin && wget https://ngc.nvidia.com/downloads/ngccli_cat_linux.zip && unzip ngccli_cat_linux.zip && chmod u+x ngc-cli/ngc && rm ngccli_cat_linux.zip ngc-cli.md5
++# echo "no-apikey\nascii\n" | ngc-cli/ngc config set
+ 
+ # Install PyTorch
+ RUN pip3 install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url https://download.pytorch.org/whl/cu116 --extra-index-url https://pypi.tuna.tsinghua.edu.cn/simple
+@@ -90,7 +104,7 @@ RUN pip3 install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url
+ COPY requirements.txt /tmp/requirements.txt
+ RUN pip3 install -r /tmp/requirements.txt
+ 
+-ENV HTTPS_PROXY "http://127.0.0.1:20171"
++# ENV HTTPS_PROXY "http://127.0.0.1:20171"
+ 
+ # Install MMLab
+ ARG TORCH_CUDA_ARCH_LIST="7.5;6.1;8.6"
+@@ -107,6 +121,16 @@ RUN cd / && \
+     cd mmdetection && git checkout v2.25.1 && \
+     pip3 install -v -e .
+ 
++RUN wget https://github.com/microsoft/onnxruntime/releases/download/v1.8.1/onnxruntime-linux-x64-1.8.1.tgz && \
++    tar -zxvf onnxruntime-linux-x64-1.8.1.tgz && \
++    cd onnxruntime-linux-x64-1.8.1 && \
++    export ONNXRUNTIME_DIR=$(pwd) && \
++    echo "ONNXRUNTIME_DIR= " ${ONNXRUNTIME_DIR} && \
++    export LD_LIBRARY_PATH=$ONNXRUNTIME_DIR/lib:$LD_LIBRARY_PATH
++
++ENV ONNXRUNTIME_DIR=${ONNXRUNTIME_DIR}/onnxruntime-linux-x64-1.8.1
++ENV LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${ONNXRUNTIME_DIR}"
++
+ RUN cd / && \
+     git clone https://github.com/open-mmlab/mmdeploy.git && \
+     cd mmdeploy && git checkout v0.10.0 && \
+@@ -115,12 +139,21 @@ RUN cd / && \
+     git clone https://github.com/pybind/pybind11.git pybind11 && \
+     cd pybind11 && git checkout 70a58c5 && \
+     cd /mmdeploy && mkdir -p build && cd build && \
+-    cmake -DCMAKE_CXX_COMPILER=g++ -DMMDEPLOY_TARGET_BACKENDS=trt -DTENSORRT_DIR=/usr -DCUDNN_DIR=/usr/local/cuda .. && \
++    cmake -DCMAKE_CXX_COMPILER=g++ -DMMDEPLOY_TARGET_BACKENDS=ort -DTENSORRT_DIR=/usr -DCUDNN_DIR=/usr/local/cuda .. && \
+     make -j$(nproc) && \
+     make install && \
+     cd /mmdeploy && pip3 install -v -e .
+ 
+-RUN sudo apt-get install -y libgl1-mesa-glx
++
++# Install onnx packages
++RUN pip3 install -U onnx==1.14.1
++RUN pip3 install -U onnxruntime-gpu==1.14.0
++RUN pip3 install -U onnx-simplifier==0.4.33
++RUN pip3 install -U numpy==1.21.6
++RUN pip3 install --no-cache-dir cmake=="3.18.4"
++# RUN pip3 install -U spo4onnx
++# RUN pip3 install tqdm==4.66.1
++# RUN pip3 install -U onnx_graphsurgeon --index-url https://pypi.ngc.nvidia.com
+ 
+ # Set environment and working directory
+ ENV TRT_LIBPATH /usr/lib/x86_64-linux-gnu
+@@ -128,5 +161,4 @@ ENV PATH="${PATH}:/usr/local/bin/ngc-cli"
+ ENV LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${TRT_OSSPATH}/build/out:${TRT_LIBPATH}"
+ WORKDIR /workspace
+ 
+-USER trtuser
+ RUN ["/bin/bash"]
+\ No newline at end of file
+diff --git a/docker_run.sh b/docker_run.sh
+new file mode 100755
+index 0000000..f14a9e4
+--- /dev/null
++++ b/docker_run.sh
+@@ -0,0 +1,24 @@
++#!/bin/bash -e
++
++model_root="$(cd "$(dirname "${BASH_SOURCE:-$0}")"/..; pwd)/BEVFormer_tensorrt"
++model_name=$(basename ${model_root})
++image_tag=trt85
++echo "model_root: ${model_root}"
++echo "model_name: ${model_name}"
++echo "image_tag: ${image_tag}"
++args=(
++    --shm-size=8g
++    -it
++    --rm
++    -v $(cd ../; pwd):/workspace
++    -v $CAN_BUS_DIR:/workspace/BEVFormer_tensorrt/data/can_bus/
++    -v $NUSCENES_DIR:/workspace/BEVFormer_tensorrt/data/nuscenes/
++    -w /workspace/${model_name}
++)
++if type nvidia-smi > /dev/null 2>&1; then
++    args=(${args[@]} --gpus=all)
++fi
++
++echo "docker_args: ${args[*]}"
++
++docker run ${args[@]} ${image_tag} /bin/bash
+\ No newline at end of file
+diff --git a/requirements.txt b/requirements.txt
+index 6e239d1..98dbea0 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,11 +1,12 @@
++nvidia-pyindex
+ matplotlib==3.5.1
+-netron==6.8.0
++netron #==6.8.0
+ numba==0.48.0
+ numpy==1.20.0
+ nuscenes_devkit==1.1.9
+ opencv_python==4.6.0.66
+ Pillow==9.5.0
+-pycocotools==2.0.4
++# pycocotools==2.0.4
+ pycuda==2022.1
+ pyquaternion==0.9.9
+ scipy==1.7.3
+@@ -15,7 +16,6 @@ terminaltables==3.1.10
+ thop==0.1.1.post2209072238
+ tqdm==4.64.0
+ trimesh==2.35.39
+-nvidia-pyindex
+-pytorch_quantization
++# pytorch_quantization
+ --extra-index-url https://pypi.ngc.nvidia.com
+ --extra-index-url https://pypi.tuna.tsinghua.edu.cn/simple
+\ No newline at end of file
+diff --git a/samples/bevformer/base/onnx2trt.sh b/samples/bevformer/base/onnx2trt.sh
+index ae6ad34..a61cecb 100644
+--- a/samples/bevformer/base/onnx2trt.sh
++++ b/samples/bevformer/base/onnx2trt.sh
+@@ -18,4 +18,4 @@ echo "Running on the GPU: $gpu_id"
+ 
+ CUDA_VISIBLE_DEVICES=$gpu_id python tools/bevformer/onnx2trt.py \
+ configs/bevformer/bevformer_base_trt.py \
+-checkpoints/onnx/bevformer_r101_dcn_24ep.onnx
++checkpoints/onnx/bevformer_tiny_epoch_24.onnx
+diff --git a/samples/bevformer/base/pth2onnx.sh b/samples/bevformer/base/pth2onnx.sh
+index 41cad82..6a91929 100644
+--- a/samples/bevformer/base/pth2onnx.sh
++++ b/samples/bevformer/base/pth2onnx.sh
+@@ -17,7 +17,7 @@ done
+ echo "Running on the GPU: $gpu_id"
+ 
+ CUDA_VISIBLE_DEVICES=$gpu_id python tools/pth2onnx.py \
+-configs/bevformer/bevformer_base_trt.py \
+-checkpoints/pytorch/bevformer_r101_dcn_24ep.pth \
++configs/bevformer/bevformer_tiny_trt.py \
++checkpoints/pytorch/bevformer_tiny_epoch_24.pth \
+ --opset_version 13 \
+ --cuda
+diff --git a/samples/bevformer/base/pth_evaluate.sh b/samples/bevformer/base/pth_evaluate.sh
+index 4f99285..d4b6aeb 100644
+--- a/samples/bevformer/base/pth_evaluate.sh
++++ b/samples/bevformer/base/pth_evaluate.sh
+@@ -1,5 +1,5 @@
+ #!/bin/bash
+-
++inference_="$1"
+ gpu_id=0
+ while getopts "d:" opt
+ do
+@@ -15,7 +15,8 @@ do
+ done
+ 
+ echo "Running on the GPU: $gpu_id"
+-
++echo "Running $inference_ inference"
+ CUDA_VISIBLE_DEVICES=$gpu_id python tools/bevformer/evaluate_pth.py \
+-configs/bevformer/bevformer_base_trt.py \
+-checkpoints/pytorch/bevformer_r101_dcn_24ep.pth
++configs/bevformer/bevformer_tiny_trt.py \
++checkpoints/pytorch/bevformer_tiny_epoch_24.pth \
++--inference "$inference_"
+diff --git a/samples/bevformer/create_data.sh b/samples/bevformer/create_data.sh
+index 1ff6a6e..4ff629f 100644
+--- a/samples/bevformer/create_data.sh
++++ b/samples/bevformer/create_data.sh
+@@ -1 +1 @@
+-python tools/bevformer/create_data.py nuscenes --root-path ./data/nuscenes --out-dir ./data/nuscenes --extra-tag nuscenes --version v1.0 --canbus ./data
++python tools/bevformer/create_data.py nuscenes --root-path /workspace/BEVFormer_tensorrt/data/nuscenes --out-dir /workspace/BEVFormer_tensorrt/data/nuscenes --extra-tag nuscenes --version v1.0 --canbus ./data
+diff --git a/third_party/bev_mmdet3d/datasets/nuscenes_eval.py b/third_party/bev_mmdet3d/datasets/nuscenes_eval.py
+index 65156d7..de438a5 100644
+--- a/third_party/bev_mmdet3d/datasets/nuscenes_eval.py
++++ b/third_party/bev_mmdet3d/datasets/nuscenes_eval.py
+@@ -883,7 +883,7 @@ if __name__ == "__main__":
+     parser.add_argument(
+         "--dataroot",
+         type=str,
+-        default="data/nuscenes",
++        default="/workspace/BEVFormer_tensorrt/data/nuscenes",
+         help="Default nuScenes data directory.",
+     )
+     parser.add_argument(
+diff --git a/tools/bevformer/create_data.py b/tools/bevformer/create_data.py
+index 907acb1..f8efc00 100644
+--- a/tools/bevformer/create_data.py
++++ b/tools/bevformer/create_data.py
+@@ -720,7 +720,7 @@ def parse_args():
+     parser.add_argument(
+         "--root-path",
+         type=str,
+-        default="./data/nuscenes",
++        default="/workspace/BEVFormer_tensorrt/data/nuscenes",
+         help="specify the root path of dataset",
+     )
+     parser.add_argument(
+@@ -746,7 +746,7 @@ def parse_args():
+     parser.add_argument(
+         "--out-dir",
+         type=str,
+-        default="./data/nuscenes",
++        default="/workspace/BEVFormer_tensorrt/data/nuscenes",
+         required=False,
+         help="name of info pkl",
+     )
+diff --git a/tools/bevformer/evaluate_pth.py b/tools/bevformer/evaluate_pth.py
+index 297f320..dc4c1b1 100644
+--- a/tools/bevformer/evaluate_pth.py
++++ b/tools/bevformer/evaluate_pth.py
+@@ -8,18 +8,19 @@ from mmcv.parallel import MMDataParallel
+ import mmcv
+ import time
+ import copy
+-
++import onnxruntime
+ import sys
+ 
+ sys.path.append(".")
+ from third_party.bev_mmdet3d.models.builder import build_model
+ from third_party.bev_mmdet3d.datasets.builder import build_dataloader, build_dataset
+-
++from torch.onnx import OperatorExportTypes
+ 
+ def parse_args():
+     parser = argparse.ArgumentParser(description="MMDet3D test (and eval) a model")
+     parser.add_argument("config", help="test config file path")
+     parser.add_argument("checkpoint", help="checkpoint file")
++    parser.add_argument("--inference", default="invalid",help="pytorch or onnxruntime inference")
+     args = parser.parse_args()
+     return args
+ 
+@@ -40,7 +41,6 @@ def main():
+                 importlib.import_module(plu)
+         else:
+             importlib.import_module(config.plugin)
+-
+     model = build_model(config.model, test_cfg=config.get("test_cfg", None))
+     checkpoint = load_checkpoint(model, checkpoint_file, map_location="cpu")
+ 
+@@ -100,9 +100,27 @@ def main():
+         with torch.no_grad():
+             torch.cuda.synchronize()
+             t1 = time.time()
+-            bev_embed, outputs_classes, outputs_coords = model(
+-                img, prev_bev, use_prev_bev, can_bus, lidar2img
+-            )
++            if args.inference=="onnxruntime":
++                inputs_ = dict(
++                    image=img.cpu().numpy(),
++                    prev_bev=prev_bev.cpu().numpy(),
++                    use_prev_bev=use_prev_bev.cpu().numpy(),
++                    can_bus=can_bus.cpu().numpy(),
++                    lidar2img=lidar2img.cpu().numpy())
++
++                model_path = "checkpoints/onnx/bevformer_tiny_epoch_24.onnx"
++                ort_session = onnxruntime.InferenceSession(model_path,providers=['CPUExecutionProvider'])
++                dumy_out = ort_session.run(input_feed=inputs_,output_names=['bev_embed', 'outputs_classes', 'outputs_coords'])
++                bev_embed = torch.Tensor(dumy_out[0])
++                outputs_classes = torch.Tensor(dumy_out[1])
++                outputs_coords = torch.Tensor(dumy_out[2])
++            elif args.inference=="pytorch":
++                bev_embed, outputs_classes, outputs_coords = model(
++                    img, prev_bev, use_prev_bev, can_bus, lidar2img
++                )
++            else:
++                print("\nInvalid option \"--inference\"")
++                exit()
+             torch.cuda.synchronize()
+             t2 = time.time()
+ 
+diff --git a/tools/pth2onnx.py b/tools/pth2onnx.py
+index 6e7dbbe..7b85aa5 100644
+--- a/tools/pth2onnx.py
++++ b/tools/pth2onnx.py
+@@ -1,4 +1,4 @@
+-from pytorch_quantization import nn as quant_nn
++# from pytorch_quantization import nn as quant_nn
+ import os
+ import argparse
+ from mmcv import Config
